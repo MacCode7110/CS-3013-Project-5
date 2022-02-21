@@ -1,2 +1,2 @@
-# Matthew McAlarney - memcalarney
+Matthew McAlarney - memcalarney
 Alison McNicholas - almcnicholas
