@@ -9,6 +9,8 @@
 #include <assert.h>
 #define MAX_LINE_SIZE 256
 
+//Partial Sum Approach
+
 //Fully compiles
 
 //Globals:
@@ -43,15 +45,28 @@ void read_input_vector(const char* filename, int n, int* array)
 }
 
 //Calculate the prefix sum, which contains the critical section
-void* calculatePrefixSum(int n)
+void* calculatePrefixSum(int startindex, int partition)
 {
 	//Provide a lock to the current thread that has entered the critical section so that no other locks can enter at the same time
 	pthread_mutex_lock(&lock);
 
 	//Critical Section
-	for(int i = 1; i < n; i++)
+
+	if((startindex + partition) <= (sizeof(input) - 1))
 	{
-		input[i] += input[i-1];
+		for(int i = startindex; i < partition; i++)
+		{
+			input[i] += input[i-1];
+		}
+	}
+	else
+	{
+		partition = (sizeof(input) - 1) - startindex;
+
+		for(int i = 0; i < partition; i++)
+		{
+			input[i] += input[i - 1];
+		}
 	}
 
 	//Release the lock so that other threads now have a chance to enter the critical section:
@@ -77,6 +92,8 @@ int main(int argc, char* argv[])
   n = atoi(argv[2]); //size of the input vector = number of lines in the file
   numThreads = atoi(argv[3]); //Third argument specifies number of threads to use for computing the solution
   pthread_t threadlist[numThreads]; //A list of all threads sent into the command line argument
+  int partition = 0; //Denotes a subsection of fullsection
+  int startindex = 1; //Denotes the current starting index inside the input array
 
   if(n < 2) //If there are less than two numbers for the prefix sum, then we cannot compute, and so we need to exit with EXIT_FAILURE.
   {
@@ -92,15 +109,20 @@ int main(int argc, char* argv[])
   //Initialize the mutex using its virtual address
   pthread_mutex_init(&lock, NULL);
 
+  //Assign the partition:
+  partition = (sizeof(input) - 1) / sizeof(threadlist);
+
   //Create each thread using a loop:
   for(int x = 0; x < sizeof(threadlist); x++)
   {
-	  int result = pthread_create(&threadlist[x], NULL, calculatePrefixSum(n), NULL);
+	 int result = pthread_create(&threadlist[x], NULL, calculatePrefixSum(startindex, partition), NULL);
 
-	  if(result != 0)
-	  {
-		  printf("\nThread cannot be created : [%s]", strerror(result));
-	  }
+	 if(result != 0)
+	 {
+	   printf("\nThread cannot be created : [%s]", strerror(result));
+	 }
+
+	 startindex = startindex + partition;
   }
 
   //Block the calling thread until all threads created for the prefix_sum calculation terminate:
