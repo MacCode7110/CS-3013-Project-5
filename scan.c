@@ -7,18 +7,26 @@
 #include <string.h>
 #include <pthread.h>
 #include <assert.h>
+#include <math.h>
 #define MAX_LINE_SIZE 256
 
-//Partial Sum Approach
-
-//Fully compiles
+//Hillis Steele Approach with a barrier created by condition variables
 
 //Globals:
 
 int *input; //shared resource among all threads
 int n = 0; //shared resource among all threads
-int numThreads = 0; //shared resource among all threads
-pthread_mutex_t lock; //Declare the mutex for locking purposes
+int numthreads = 0; //shared resource among all threads
+//pthread_mutex_t lock; //Declare the mutex for locking purposes
+
+//Global Condition Variables:
+
+int moveontonextcomputationlevel = 1; //Used to tell a thread when to move onto the next level/iteration of sums/computations
+int prefixsumparallelcalccomplete = 0; //Used to tell a thread when the prefix sum calculation is complete
+double numsteps = 0; //Used to keep trakc of the number of individual sums
+
+//Global Hillis Steele Algorithm Variable:
+int addacrossinterval = 1;
 
 //Read in input from the argument file into an array of integer pointers
 void read_input_vector(const char* filename, int n, int* array)
@@ -45,32 +53,44 @@ void read_input_vector(const char* filename, int n, int* array)
 }
 
 //Calculate the prefix sum, which contains the critical section
-void* calculatePrefixSum(int startindex, int partition)
+void* calculateprefixsum()
 {
 	//Provide a lock to the current thread that has entered the critical section so that no other locks can enter at the same time
-	pthread_mutex_lock(&lock);
+	//pthread_mutex_lock(&lock);
 
 	//Critical Section
 
-	if((startindex + partition) <= (sizeof(input) - 1))
+	if(prefixsumparallelcalccomplete == 0)
 	{
-		for(int i = startindex; i < partition; i++)
+		if(moveontonextcomputationlevel == 1)
 		{
-			input[i] += input[i-1];
-		}
-	}
-	else
-	{
-		partition = (sizeof(input) - 1) - startindex;
+			moveontonextcomputationlevel = 0;
 
-		for(int i = 0; i < partition; i++)
-		{
-			input[i] += input[i - 1];
+			for(int i = 0; i < sizeof(input); i++)
+			{
+				if((i + addacrossinterval) <= (sizeof(input) - 1))
+				{
+					input[i + addacrossinterval] = input[i] + input[i + addacrossinterval];
+					numsteps++;
+
+					//NOTE: All input[i] proceeding the first input[i + addacrossinterval] will retain the same value.
+
+					//Determine if the prefix sum calculation has finished by seeing if the number of steps = log2(number of numbers to sum)
+					if(numsteps == log2(sizeof(input)))
+					{
+						prefixsumparallelcalccomplete = 1;
+					}
+				}
+			}
+
+			//Update variables for next level of computation
+			addacrossinterval = addacrossinterval * 2;
+			moveontonextcomputationlevel = 1;
 		}
 	}
 
 	//Release the lock so that other threads now have a chance to enter the critical section:
-	pthread_mutex_unlock(&lock);
+	//pthread_mutex_unlock(&lock);
 
 	return NULL;
 }
@@ -90,10 +110,8 @@ int main(int argc, char* argv[])
   //argv[0] is a pointer to the name of the program being run.
   char* filename = argv[1];//filename pointer
   n = atoi(argv[2]); //size of the input vector = number of lines in the file
-  numThreads = atoi(argv[3]); //Third argument specifies number of threads to use for computing the solution
-  pthread_t threadlist[numThreads]; //A list of all threads sent into the command line argument
-  int partition = 0; //Denotes a subsection of fullsection
-  int startindex = 1; //Denotes the current starting index inside the input array
+  numthreads = atoi(argv[3]); //Third argument specifies number of threads to use for computing the solution
+  pthread_t threadlist[numthreads]; //A list of all threads sent into the command line argument
 
   if(n < 2) //If there are less than two numbers for the prefix sum, then we cannot compute, and so we need to exit with EXIT_FAILURE.
   {
@@ -104,25 +122,20 @@ int main(int argc, char* argv[])
   input = malloc(sizeof(int) * n);
   read_input_vector(filename, n, input);
 
-  //Calculate the prefix sum
+  //Calculate the prefix sum using a version of the Hillis and Steele Algorithm
 
   //Initialize the mutex using its virtual address
-  pthread_mutex_init(&lock, NULL);
-
-  //Assign the partition:
-  partition = (sizeof(input) - 1) / sizeof(threadlist);
+  //pthread_mutex_init(&lock, NULL);
 
   //Create each thread using a loop:
   for(int x = 0; x < sizeof(threadlist); x++)
   {
-	 int result = pthread_create(&threadlist[x], NULL, calculatePrefixSum(startindex, partition), NULL);
+	 int result = pthread_create(&threadlist[x], NULL, calculateprefixsum(), NULL);
 
 	 if(result != 0)
 	 {
 	   printf("\nThread cannot be created : [%s]", strerror(result));
 	 }
-
-	 startindex = startindex + partition;
   }
 
   //Block the calling thread until all threads created for the prefix_sum calculation terminate:
@@ -132,7 +145,7 @@ int main(int argc, char* argv[])
   }
 
   //Destroy the mutex lock since all threads created for the prefix_sum calculation have terminated:
-  pthread_mutex_destroy(&lock);
+  //pthread_mutex_destroy(&lock);
 
   //Print the Prefix Sum:
 
