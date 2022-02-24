@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
+#include<sys/wait.h>
+#include<unistd.h>
 #define MAX_LINE_SIZE 256
 
 //Hillis Steele Approach with a barrier created by condition variables
@@ -31,6 +33,7 @@ int addacrossinterval = 1;
 //Read in input from the argument file into an array of integer pointers
 void read_input_vector(const char* filename, int n, int* array)
 {
+printf("running read_input_vector\n");fflush(stdout);
   FILE *fp;
   char *line = malloc(MAX_LINE_SIZE+1);
   size_t len = MAX_LINE_SIZE;
@@ -50,11 +53,13 @@ void read_input_vector(const char* filename, int n, int* array)
 
   free(line);
   fclose(fp);
+  printf("finished reading_input_vector\n");fflush(stdout);
 }
 
 //Calculate the prefix sum, which contains the critical section
 void* calculateprefixsum()
 {
+printf("running calculateprefixsum\n");fflush(stdout);
 	//Provide a lock to the current thread that has entered the critical section so that no other locks can enter at the same time
 	//pthread_mutex_lock(&lock);
 
@@ -92,21 +97,27 @@ void* calculateprefixsum()
 	//Release the lock so that other threads now have a chance to enter the critical section:
 	//pthread_mutex_unlock(&lock);
 
+	
+	printf("finished caculate prefix sum\n");fflush(stdout);
 	return NULL;
 }
 
 //Print the prefix sum
 void* printPrefixSum()
 {
+printf("running print prefix sum\n");fflush(stdout);
 	for(int i = 0; i < n; i++)
 	{
-		printf("%d\n", input[i]);
+		printf("%d\n", input[i]); fflush(stdout);
 	}
+	printf("finished print prefix sum\n");fflush(stdout);
 	return NULL;
+
 }
 
 int main(int argc, char* argv[])
 {
+printf("running main\n");fflush(stdout);
   //argv[0] is a pointer to the name of the program being run.
   char* filename = argv[1];//filename pointer
   n = atoi(argv[2]); //size of the input vector = number of lines in the file
@@ -121,7 +132,6 @@ int main(int argc, char* argv[])
   //Read in the contents (integers in this case) of the first argument file in the read_input_vector function
   input = malloc(sizeof(int) * n);
   read_input_vector(filename, n, input);
-
   //Calculate the prefix sum using a version of the Hillis and Steele Algorithm
 
   //Initialize the mutex using its virtual address
@@ -136,12 +146,18 @@ int main(int argc, char* argv[])
 	 {
 	   printf("\nThread cannot be created : [%s]", strerror(result));
 	 }
+	 printf("Result = %d, threadlist pointer: %p\n", result, &threadlist[x]);fflush(stdout);
   }
 
   //Block the calling thread until all threads created for the prefix_sum calculation terminate:
+ 
   for(int y = 0; y < sizeof(threadlist); y++)
   {
-	  pthread_join(threadlist[y], NULL);
+// printf("y: %d\n",y); fflush(stdout);
+  printf("threadlist[%d]: %ld\n", y, threadlist[y]); fflush(stdout);
+	 // pthread_join(threadlist[y], NULL);
+	//  printf("error here\n"); fflush(stdout);
+	  
   }
 
   //Destroy the mutex lock since all threads created for the prefix_sum calculation have terminated:
@@ -150,10 +166,13 @@ int main(int argc, char* argv[])
   //Print the Prefix Sum:
 
   pthread_t thread_id;
+// pthread_create(&thread_id, NULL, calculateprefixsum, NULL);
+  
   pthread_create(&thread_id, NULL, printPrefixSum, NULL);
+printf("working?\n");fflush(stdout);
   //Block the calling thread until thread_id terminates. Then, the calling thread can resume execution.
-  pthread_join(thread_id, NULL);
-
+//  pthread_join(thread_id, NULL);
+printf("finished main\n");fflush(stdout);
   exit(0);
   fflush(stdout);
   return EXIT_SUCCESS;
