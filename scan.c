@@ -68,11 +68,14 @@ void* calculateprefixsum()
 
 	if(threadcounter == maxnumthreads)
 	{
-		sem_wait(&s2);
-		sem_post(&s1);
+		sem_wait(&s2); //The value of the semaphore decrements by 1 regardless of if the thread waits at it
+		sem_post(&s1); //Thread 2 will post to s1, the value of the semaphore increments by 1
 	}
 
 	pthread_mutex_unlock(&lock);
+
+	sem_wait(&s1); //Thread 1 stops/waits because s1's initial value is less than or equal to 0 (deadlock happening here)
+	sem_post(&s1); //The thread that goes through always frees the one behind it
 
 	//Critical Section
 
@@ -111,14 +114,14 @@ void* calculateprefixsum()
 
 	if(threadcounter == 0)
 	{
-		sem_wait(&s1);
+		sem_wait(&s1); //s1's value is 2 when thread 1 goes through, so thread 2 does not wait here
 		sem_post(&s2);
 	}
 
 	pthread_mutex_unlock(&lock);
 
-	sem_wait(&s2);
-	sem_post(&s2);
+	sem_wait(&s2); //s2's value gets decremented to 0 by thread 1. s2's value gets decremented to 0 again by thread 2
+	sem_post(&s2); //s2's value gets incremented to 1 by thread 1. s2's value gets incremented to 1 again by thread 2
 
 	return NULL;
 }
@@ -138,7 +141,6 @@ void* printPrefixSum()
 int main(int argc, char* argv[])
 {
   char* filename;
-  pthread_t threadlist;
 
   if(argc == 4)
   {
@@ -147,7 +149,6 @@ int main(int argc, char* argv[])
 	  n = atoi(argv[2]); //size of the input vector = number of lines in the file
 	  //Getting a seg fault right above
 	  numthreads = atoi(argv[3]); //Third argument specifies number of threads to use for computing the solution
-	  threadlist[numthreads]; //A list of all threads sent into the command line argument
   }
   else
   {
@@ -156,8 +157,10 @@ int main(int argc, char* argv[])
 
   if(n < 2) //If there are less than two numbers for the prefix sum, then we cannot compute, and so we need to exit with EXIT_FAILURE.
   {
-	exit(EXIT_FAILURE);
+	 exit(EXIT_FAILURE);
   }
+
+  pthread_t threadlist[numthreads];
 
   //Read in the contents (integers in this case) of the first argument file in the read_input_vector function
   input = malloc(sizeof(int) * n);
@@ -166,8 +169,8 @@ int main(int argc, char* argv[])
 
   //Initialize the mutex lock and semaphores:
   pthread_mutex_init(&lock, NULL);
-  sem_init(&s1, 1, 0);
-  sem_init(&s2, 1, 0);
+  sem_init(&s1, 0, 0);
+  sem_init(&s2, 0, numthreads);
 
   //Set the condition variable to the maximum number of threads:
   maxnumthreads = numthreads;
@@ -183,6 +186,12 @@ int main(int argc, char* argv[])
 	 }
   }
 
+  //Join each thread to allow the main function to continue execution once all threads are finished with their individual executions of the critical section.
+  for(int y = 0; y < sizeof(threadlist); y++)
+  {
+	  pthread_join(threadlist[y], NULL);
+  }
+
   //Destroy the mutex lock since all threads created for the prefix_sum calculation have terminated:
   pthread_mutex_destroy(&lock);
 
@@ -194,7 +203,5 @@ int main(int argc, char* argv[])
   pthread_join(thread_id, NULL);
 
   free(input);
-  exit(0);
-  fflush(stdout);
   return EXIT_SUCCESS;
 }
