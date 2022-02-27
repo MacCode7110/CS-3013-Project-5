@@ -34,6 +34,3 @@ When thread make their way past the first barrier of the 2-phased barrier surrou
 
 How our design implements concurrency mechnaisms to ensure correctness, avoid deadlocks, and coordinate threads:
 
-
-
-
