@@ -21,6 +21,11 @@ int threadcounter = 0;
 pthread_mutex_t lock;
 sem_t s1;
 sem_t s2;
+//Debugging Variables:
+int* val1 = 0;
+int* val2 = 0;
+int val22 = 0;
+int val11 = 0;
 
 //Global Condition Variables:
 int maxnumthreads;
@@ -60,6 +65,7 @@ void read_input_vector(const char* filename, int n, int* array)
 //Calculate the prefix sum, which contains the critical section
 void* calculateprefixsum()
 {
+
 	//Two-Phase Barrier: wait for all the threads to arrive and for all the threads to execute the critical section
 
 	//Barrier 1
@@ -68,44 +74,47 @@ void* calculateprefixsum()
 
 	if(threadcounter == maxnumthreads)
 	{
-		sem_wait(&s2); //The value of the semaphore decrements by 1 regardless of if the thread waits at it
-		sem_post(&s1); //Thread 2 will post to s1, the value of the semaphore increments by 1
+    	sem_wait(&s2); //The value of the semaphore decrements by 1 regardless of if the thread waits at it
+    	sem_post(&s1); //Thread 2 will post to s1, the value of the semaphore increments by 1
 	}
 
 	pthread_mutex_unlock(&lock);
 
-	sem_wait(&s1); //Thread 1 stops/waits because s1's initial value is less than or equal to 0 (deadlock happening here)
+	//sem_getvalue(&s1, val1);
+	//val11 = *val1;
+	//printf("%d", val11);
+	sem_wait(&s1); //Thread 1 stops/waits because s1's initial value is less than or equal to 0
 	sem_post(&s1); //The thread that goes through always frees the one behind it
 
 	//Critical Section
 
 	if(prefixsumparallelcalccomplete == 0)
 	{
-		if(moveontonextcomputationlevel == 1)
-		{
-			moveontonextcomputationlevel = 0;
+    	if(moveontonextcomputationlevel == 1)
+    	{
+        	moveontonextcomputationlevel = 0;
 
-			for(int i = 0; i < sizeof(input); i++)
-			{
-				if((i + addacrossinterval) <= (sizeof(input) - 1))
-				{
-					input[i + addacrossinterval] = input[i] + input[i + addacrossinterval];
-					numsteps++;
+        	for(int i = 0; i < n; i++)
+        	{
+            	if((i + addacrossinterval) <= (n - 1))
+            	{
+                	input[i + addacrossinterval] = input[i] + input[i + addacrossinterval];
+                	numsteps++;
 
-					//NOTE: All input[i] proceeding the first input[i + addacrossinterval] will retain the same value.
+                	//NOTE: All input[i] proceeding the first input[i + addacrossinterval] will retain the same value.
 
-					//Determine if the prefix sum calculation has finished by seeing if the number of steps = log2(number of numbers to sum)
-					if(numsteps == log2(sizeof(input)))
-					{
-						prefixsumparallelcalccomplete = 1;
-					}
-				}
-			}
+                	//Determine if the prefix sum calculation has finished by seeing if the number of steps = log2(number of numbers to sum)
+                	if(numsteps == log2(n))
+                	{
+                    	prefixsumparallelcalccomplete = 1;
+                	}
+            	}
+        	}
 
-			//Update variables for next level of computation
-			addacrossinterval = addacrossinterval * 2;
-			moveontonextcomputationlevel = 1;
-		}
+        	//Update variables for next level of computation
+        	addacrossinterval = addacrossinterval * 2;
+        	moveontonextcomputationlevel = 1;
+    	}
 	}
 
 	//Barrier 2
@@ -114,8 +123,11 @@ void* calculateprefixsum()
 
 	if(threadcounter == 0)
 	{
-		sem_wait(&s1); //s1's value is 2 when thread 1 goes through, so thread 2 does not wait here
-		sem_post(&s2);
+    	//sem_getvalue(&s1, val2);
+    	//val22 = *val2;
+    	//printf("%d", val22);
+    	sem_wait(&s1); //s1's value is 1 when thread 1 goes through, so thread 2 does not wait here
+    	sem_post(&s2);
 	}
 
 	pthread_mutex_unlock(&lock);
@@ -131,8 +143,8 @@ void* printPrefixSum()
 {
 	for(int i = 0; i < n; i++)
 	{
-		printf("%d\n", input[i]);
-		fflush(stdout);
+    	printf("%d\n", input[i]);
+    	fflush(stdout);
 	}
 
 	return NULL;
@@ -144,20 +156,20 @@ int main(int argc, char* argv[])
 
   if(argc == 4)
   {
-	  //argv[0] is a pointer to the name of the program being run.
-	  filename = argv[1];//filename pointer
-	  n = atoi(argv[2]); //size of the input vector = number of lines in the file
-	  //Getting a seg fault right above
-	  numthreads = atoi(argv[3]); //Third argument specifies number of threads to use for computing the solution
+  	//argv[0] is a pointer to the name of the program being run.
+  	filename = argv[1];//filename pointer
+  	n = atoi(argv[2]); //size of the input vector = number of lines in the file
+  	//Getting a seg fault right above
+  	numthreads = atoi(argv[3]); //Third argument specifies number of threads to use for computing the solution
   }
   else
   {
-	  exit(EXIT_FAILURE);
+  	exit(EXIT_FAILURE);
   }
 
   if(n < 2) //If there are less than two numbers for the prefix sum, then we cannot compute, and so we need to exit with EXIT_FAILURE.
   {
-	 exit(EXIT_FAILURE);
+ 	exit(EXIT_FAILURE);
   }
 
   pthread_t threadlist[numthreads];
@@ -170,26 +182,26 @@ int main(int argc, char* argv[])
   //Initialize the mutex lock and semaphores:
   pthread_mutex_init(&lock, NULL);
   sem_init(&s1, 0, 0);
-  sem_init(&s2, 0, numthreads);
+  sem_init(&s2, 0, 2);
 
   //Set the condition variable to the maximum number of threads:
   maxnumthreads = numthreads;
 
   //Create each thread using a loop:
-  for(int x = 0; x < sizeof(threadlist); x++)
+  for(int x = 0; x < numthreads; x++)
   {
-	 int result = pthread_create(&threadlist[x], NULL, calculateprefixsum(), NULL);
+ 	int result = pthread_create(&threadlist[x], NULL, calculateprefixsum, NULL);
 
-	 if(result != 0)
-	 {
-	   printf("\nThread cannot be created : [%s]", strerror(result));
-	 }
+ 	if(result != 0)
+ 	{
+   	printf("\nThread cannot be created : [%s]", strerror(result));
+ 	}
   }
 
   //Join each thread to allow the main function to continue execution once all threads are finished with their individual executions of the critical section.
-  for(int y = 0; y < sizeof(threadlist); y++)
+  for(int y = 0; y < numthreads; y++)
   {
-	  pthread_join(threadlist[y], NULL);
+  	pthread_join(threadlist[y], NULL); //Join does not affect the deadlock
   }
 
   //Destroy the mutex lock since all threads created for the prefix_sum calculation have terminated:
